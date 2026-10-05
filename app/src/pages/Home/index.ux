@@ -40,7 +40,7 @@
       <text class="sub">屏幕</text>
       <div class="row3">
         <input type="button" class="wide" value="{{keepOn ? '关闭常亮' : '屏幕常亮'}}" onclick="toggleKeepOn" />
-        <input type="button" class="wide" value="調暗" onclick="setDim" />
+        <input type="button" class="wide" value="调暗" onclick="setDim" />
       </div>
       <list class="list">
         <list-item class="item" for="{{(i, it) in toolRows}}">
@@ -126,6 +126,16 @@
 
   var GREEN = '#7ec699', RED = '#e08a8a', GOLD = '#c9a96e', GREY = '#8a8a8a', WHITE = '#e8e8e8'
 
+  function statusOf(res) {
+    try {
+      if (res === undefined || res === null) return '?'
+      if (typeof res === 'number') return '' + res
+      var c = res.status || res.statusCode || res.code || res.status_code
+      if (c !== undefined && c !== null && c !== '') return '' + c
+      var ks = Object.keys(res)
+      return ks.length ? ('{' + ks.slice(0, 4).join(',') + '}') : '(无字段)'
+    } catch (e) { return '?' }
+  }
   function J(v, n) {
     n = n || 90
     try {
@@ -290,14 +300,14 @@
             return netFetch.fetch({ url: urls[idx][1], method: 'GET', responseType: 'text',
               success: function (res) {
                 okN++
-                setRow(idx, '★ HTTP ' + (res && res.status) + ' · ' + (Date.now() - t0) + 'ms', GREEN)
+                setRow(idx, '★ ' + statusOf(res) + ' · ' + (Date.now() - t0) + 'ms', GREEN)
                 self.netTip = '成功 ' + okN + ' / 3'
               },
               fail: function (e) { setRow(idx, '✗ ' + J(e, 50), RED) } })
           })
           if (!r.ok) { setRow(idx, '✗ ' + J(r.v, 50), RED); return }
-          if (r.v && typeof r.v.then === 'function') r.v.then(function (res) { okN++; setRow(idx, '★ HTTP ' + (res && res.status), GREEN); self.netTip = '成功 ' + okN + ' / 3' })['catch'](function (e) { setRow(idx, '✗ ' + J(e, 50), RED) })
-          else if (r.v && typeof r.v === 'object' && (r.v.status || r.v.data !== undefined)) { okN++; setRow(idx, '★ HTTP ' + r.v.status, GREEN); self.netTip = '成功 ' + okN + ' / 3' }
+          if (r.v && typeof r.v.then === 'function') r.v.then(function (res) { okN++; setRow(idx, '★ ' + statusOf(res), GREEN); self.netTip = '成功 ' + okN + ' / 3' })['catch'](function (e) { setRow(idx, '✗ ' + J(e, 50), RED) })
+          else if (r.v && typeof r.v === 'object' && (r.v.status || r.v.data !== undefined)) { okN++; setRow(idx, '★ ' + statusOf(r.v), GREEN); self.netTip = '成功 ' + okN + ' / 3' }
           else setRow(idx, '无结果', GREY)
         })(k)
       }

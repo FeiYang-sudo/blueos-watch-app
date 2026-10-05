@@ -2,17 +2,24 @@
 
 **vivo / iQOO 蓝河（BlueOS）手表应用** —— 设备信息 + 实用工具 + 能力诊断
 
-实测机型：**iQOO WATCH GT**（`WA2456C` / BlueOS 3.0） · 当前版本：**v4.1.0** · 包名：`com.dz6g.watchinfo`
+实测机型：**iQOO WATCH GT**（`WA2456C` / BlueOS 3.0） · 当前版本：**v4.2.0** · 包名：`com.dz6g.watchinfo`
 
 ---
 
 ## 📸 截图
 
-**信息页** —— 电量大字（含充电状态）+ 设备信息，整页可滚动
+<table>
+<tr>
+<td align="center"><img src="docs/images/01-info.png" width="300"><br><b>信息</b><br><sub>电量大字（含充电状态）+ 设备信息，整页可滚动</sub></td>
+<td align="center"><img src="docs/images/02-tools.png" width="300"><br><b>工具</b><br><sub>振动（短/长/两下）· 屏幕常亮 · 调暗</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/03-capability.png" width="300"><br><b>能力</b><br><sub>本机型实测能力报告</sub></td>
+<td align="center"><img src="docs/images/04-network.png" width="300"><br><b>网络</b><br><sub>连通性诊断（GitHub 通 / 本站不通）</sub></td>
+</tr>
+</table>
 
-<img src="docs/images/01-info.png" width="330" alt="信息页">
-
-> 工具页 / 能力页 / 网络页 截图待补充（`docs/images/02-tools.png`、`03-capability.png`、`04-network.png`）
+> 截图为实拍（iQOO WATCH GT）。v4.2 起修正了工具页「调暗」用字与网络页状态码显示。
 
 ## 功能
 
@@ -29,7 +36,7 @@
 
 ## 安装（侧载）
 
-1. 下载 [`dist/com.dz6g.watchinfo.debug.4.1.0.rpk`](dist)
+1. 下载 [`dist/com.dz6g.watchinfo.debug.4.2.0.rpk`](dist)（上一版也保留在 `dist/` 里）
 2. 用社区侧载工具（如**蓝盒助手**）导入并安装到手表
 3. 机型限制：vivo / iQOO **WATCH GT**、**WATCH 3** 系列（初代 / 二代 / 五代不支持侧载）
 
@@ -124,6 +131,7 @@ META-INF/build.txt    工具链信息（toolkit=1.0.12-beta.13 / platform=linux�
 | v3.0–3.4 | 联网诊断（9 项对照实验）| **只有 GitHub 通**，本站全不通 |
 | **v4.0** | 完整版：信息 / 工具 / 能力 / 网络 + 新图标 | 交付 |
 | **v4.1** | 修 UI：电量卡改为随列表滚动，不再遮挡信息 | 交付 |
+| **v4.2** | 修正工具页「调暗」用字；网络页状态码按真实字段显示 | 交付 |
 
 > 说明：早期版本的源码在迭代中被覆盖、产物已在重建时清理，因此仓库只保留**最终版源码 + 成品**，
 > 上面这张表完整记录了每个版本做了什么、得到什么结论。
