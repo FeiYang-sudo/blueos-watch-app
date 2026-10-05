@@ -62,7 +62,7 @@
 
 ## 安装（侧载）
 
-1. 从 [Releases](https://github.com/FeiYang-sudo/blueos-watch-app/releases/latest) 下载最新的 `*.rpk`（`dist/` 里也保留了两个最近版本）
+1. 从 [Releases](https://github.com/FeiYang-sudo/blueos-watch-app/releases/latest) 下载最新的 `*.rpk`（**所有安装包以 Releases 为准**）
 2. 用社区侧载工具（如**蓝盒助手**）导入并安装到手表
 3. 机型限制：vivo / iQOO **WATCH GT**、**WATCH 3** 系列（初代 / 二代 / 五代不支持侧载）
 
@@ -172,7 +172,6 @@ app/                     BlueOS 工程源码
     ├── app.ux           应用级（空实现）
     ├── assets/images/logo.png
     └── pages/Home/index.ux   全部界面逻辑（四个标签）
-dist/                    成品 rpk
 docs/                    截图与补充文档
 tools/
 ├── build.sh             一键构建（含报错检查）
