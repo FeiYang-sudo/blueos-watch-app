@@ -4,6 +4,9 @@
 
 实测机型：**iQOO WATCH GT**（`WA2456C` / BlueOS 3.0） · 当前版本：**v4.2.0** · 包名：`com.dz6g.watchinfo`
 
+[![最新版](https://img.shields.io/github/v/release/FeiYang-sudo/blueos-watch-app?label=%E6%9C%80%E6%96%B0%E7%89%88&color=c9a96e)](https://github.com/FeiYang-sudo/blueos-watch-app/releases/latest)
+[![所有版本](https://img.shields.io/badge/%E5%8E%86%E5%8F%B2%E7%89%88%E6%9C%AC-16%20%E4%B8%AA-c9a96e)](https://github.com/FeiYang-sudo/blueos-watch-app/releases)
+
 ---
 
 ## 📸 截图
@@ -21,6 +24,29 @@
 
 > 截图为实拍（iQOO WATCH GT）。v4.2 起修正了工具页「调暗」用字与网络页状态码显示。
 
+## 📦 下载
+
+**最新版 → [v4.2.0](https://github.com/FeiYang-sudo/blueos-watch-app/releases/latest)** ｜ [全部 16 个版本](https://github.com/FeiYang-sudo/blueos-watch-app/releases)
+
+每个 Release 里都有三样东西：
+
+| 文件 | 说明 |
+|---|---|
+| `*.rpk` | **安装包**（用社区侧载工具导入手表）|
+| `index.ux` | 该版本完整源码（可复现）|
+| `manifest.json` | 该版本配置 |
+
+| 里程碑版本 | 说明 |
+|---|---|
+| [v4.2.0](https://github.com/FeiYang-sudo/blueos-watch-app/releases/tag/v4.2.0) | **当前最新**：修正用字与网络页状态码显示 |
+| [v4.0.0](https://github.com/FeiYang-sudo/blueos-watch-app/releases/tag/v4.0.0) | 完整版（信息 / 工具 / 能力 / 网络 + 新图标）|
+| [v2.2.0](https://github.com/FeiYang-sudo/blueos-watch-app/releases/tag/v2.2.0) | 模块能力探明：9 / 9 加载成功 |
+| [v2.4.0](https://github.com/FeiYang-sudo/blueos-watch-app/releases/tag/v2.4.0) | 传感器结论：7 种订阅姿势零数据 |
+| [v3.4.0](https://github.com/FeiYang-sudo/blueos-watch-app/releases/tag/v3.4.0) | 网络结论：只通 GitHub，本站全不通 |
+| [v1.1.0](https://github.com/FeiYang-sudo/blueos-watch-app/releases/tag/v1.1.0) | 最早可复原版本（自适应探测版）|
+
+> v1.0 的源码在早期迭代中被覆盖、无法复原，故 Releases 从 v1.1.0 起；版本沿革见 [docs/versions.md](docs/versions.md)。
+
 ## 功能
 
 | 标签 | 内容 |
@@ -36,7 +62,7 @@
 
 ## 安装（侧载）
 
-1. 下载 [`dist/com.dz6g.watchinfo.debug.4.2.0.rpk`](dist)（上一版也保留在 `dist/` 里）
+1. 从 [Releases](https://github.com/FeiYang-sudo/blueos-watch-app/releases/latest) 下载最新的 `*.rpk`（`dist/` 里也保留了两个最近版本）
 2. 用社区侧载工具（如**蓝盒助手**）导入并安装到手表
 3. 机型限制：vivo / iQOO **WATCH GT**、**WATCH 3** 系列（初代 / 二代 / 五代不支持侧载）
 

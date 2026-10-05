@@ -1,5 +1,8 @@
 # 开发过程中的实测记录（按版本）
 
+> **各版本安装包已发布在 [Releases](https://github.com/FeiYang-sudo/blueos-watch-app/releases)**：
+> 每个 Release 含该版 `*.rpk` 安装包 + `index.ux` 源码 + `manifest.json`（v1.0 源码未能复原，故从 v1.1.0 起）。
+
 > 每个版本的界面/结论都来自真机安装验证（iQOO WATCH GT / WA2456C / BlueOS 3.0）。
 
 ## v1.x —— 蓝牙信息探测
