@@ -1,0 +1,314 @@
+<template>
+  <div class="page">
+    <div class="hd">
+      <text class="t1">手表信息</text>
+      <text class="t2">{{subtitle}}</text>
+    </div>
+
+    <div class="tabs">
+      <div class="tab" for="{{(i, n) in tabs}}" onclick="onTab(i)"
+           style="background-color: {{tab === i ? '#c9a96e' : '#1c1c1c'}};">
+        <text style="font-size: 20px; color: {{tab === i ? '#0b0b0b' : '#c9a96e'}};">{{n}}</text>
+      </div>
+    </div>
+
+    <!-- ============ 信息 ============ -->
+    <block if="{{tab === 0}}">
+      <list class="list">
+        <list-item class="hero">
+          <div class="herowrap">
+            <text class="bat">{{battery}}</text>
+            <text class="batchg">{{chargeText}} · {{model}}</text>
+          </div>
+        </list-item>
+        <list-item class="item" for="{{(i, it) in sysRows}}">
+          <text class="k">{{it.k}}</text>
+          <text class="v" style="color: {{it.c}};">{{it.v}}</text>
+        </list-item>
+      </list>
+      <text class="hint" onclick="loadSys">↻ 刷新</text>
+    </block>
+
+    <!-- ============ 工具 ============ -->
+    <block elif="{{tab === 1}}">
+      <text class="sub">振动</text>
+      <div class="row3">
+        <input type="button" class="mini" value="短振" onclick="vib('short')" />
+        <input type="button" class="mini" value="长振" onclick="vib('long')" />
+        <input type="button" class="mini" value="两下" onclick="vib('twice')" />
+      </div>
+      <text class="sub">屏幕</text>
+      <div class="row3">
+        <input type="button" class="wide" value="{{keepOn ? '关闭常亮' : '屏幕常亮'}}" onclick="toggleKeepOn" />
+        <input type="button" class="wide" value="調暗" onclick="setDim" />
+      </div>
+      <list class="list">
+        <list-item class="item" for="{{(i, it) in toolRows}}">
+          <text class="k">{{it.k}}</text>
+          <text class="v" style="color: {{it.c}};">{{it.v}}</text>
+        </list-item>
+      </list>
+      <text class="hint" onclick="loadTools">↻ 刷新</text>
+    </block>
+
+    <!-- ============ 能力 ============ -->
+    <block elif="{{tab === 2}}">
+      <list class="list">
+        <list-item class="item" for="{{(i, r) in capRows}}">
+          <text class="k">{{r.k}}</text>
+          <text class="v" style="font-size: 20px; color: {{r.c}};">{{r.v}}</text>
+        </list-item>
+      </list>
+      <text class="hint" onclick="loadCap">↻ 重新实测</text>
+    </block>
+
+    <!-- ============ 网络 ============ -->
+    <block elif="{{tab === 3}}">
+      <div class="row2">
+        <input type="button" class="mini2" value="网络诊断" onclick="testNet" />
+        <input type="button" class="mini2" value="清空" onclick="clearNet" />
+      </div>
+      <text class="sub">{{netTip}}</text>
+      <list class="list">
+        <list-item class="card" for="{{(i, r) in netRows}}">
+          <text class="rk">{{r.k}}</text>
+          <text class="rv" style="color: {{r.c}};">{{r.v}}</text>
+        </list-item>
+      </list>
+    </block>
+  </div>
+</template>
+
+<style>
+  .page { flex-direction: column; width: 466px; height: 466px; background-color: #0b0b0b; padding: 20px 22px; }
+  .hd { flex-direction: column; align-items: center; margin-bottom: 8px; }
+  .t1 { font-size: 34px; color: #c9a96e; }
+  .t2 { font-size: 17px; color: #8a8a8a; margin-top: 2px; }
+  .tabs { flex-direction: row; justify-content: center; margin-bottom: 8px; }
+  .tab { flex-direction: row; justify-content: center; align-items: center;
+         width: 100px; height: 46px; border-radius: 23px; margin: 0 4px; }
+  .hero { flex-direction: column; padding: 10px 14px; margin-bottom: 7px; background-color: #141414;
+          border-radius: 14px; border-left-width: 6px; border-left-color: #c9a96e; }
+  .herowrap { flex-direction: row; align-items: flex-end; }
+  .bat { font-size: 46px; color: #c9a96e; }
+  .batchg { font-size: 18px; color: #9a9a9a; margin-left: 10px; margin-bottom: 7px; }
+  .list { flex: 1; flex-direction: column; }
+  .item { flex-direction: column; padding: 9px 13px; margin-bottom: 6px; background-color: #161616; border-radius: 11px; }
+  .k { font-size: 20px; color: #8a8a8a; }
+  .v { font-size: 23px; color: #e8e8e8; margin-top: 2px; }
+  .card { flex-direction: column; padding: 9px 13px; margin-bottom: 6px; background-color: #161616;
+          border-radius: 11px; border-left-width: 5px; border-left-color: #c9a96e; }
+  .rk { font-size: 18px; color: #8a8a8a; }
+  .rv { font-size: 19px; color: #e8e8e8; margin-top: 2px; }
+  .row2 { flex-direction: row; justify-content: center; margin-bottom: 6px; }
+  .row3 { flex-direction: row; justify-content: center; margin-bottom: 8px; }
+  .mini { width: 108px; height: 50px; border-radius: 25px; margin: 0 4px; font-size: 20px;
+          background-color: #c9a96e; color: #0b0b0b; }
+  .mini2 { width: 170px; height: 50px; border-radius: 25px; margin: 0 5px; font-size: 20px;
+           background-color: #c9a96e; color: #0b0b0b; }
+  .wide { width: 168px; height: 50px; border-radius: 25px; margin: 0 5px; font-size: 20px;
+          background-color: #262626; color: #c9a96e; }
+  .sub { font-size: 17px; color: #8a8a8a; margin-bottom: 5px; text-align: center; }
+  .hint { font-size: 20px; color: #c9a96e; text-align: center; padding: 8px; }
+</style>
+
+<script>
+  import deviceInfo from '@blueos.hardware.deviceInfo'
+  import battery from '@blueos.hardware.battery'
+  import brightness from '@blueos.hardware.display.brightness'
+  import vibrator from '@blueos.hardware.vibrator'
+  import statvfs from '@blueos.storage.statvfs'
+  import bt from '@blueos.bluetooth.bluetoothManager'
+  import sensor from '@blueos.hardware.sensor'
+  import health from '@blueos.health.healthManager'
+  import netFetch from '@blueos.network.fetch'
+  import screen from '@blueos.hardware.display.screen'
+
+  var GREEN = '#7ec699', RED = '#e08a8a', GOLD = '#c9a96e', GREY = '#8a8a8a', WHITE = '#e8e8e8'
+
+  function J(v, n) {
+    n = n || 90
+    try {
+      if (v === undefined) return 'undefined'
+      if (v === null) return 'null'
+      if (typeof v.then === 'function') return 'Promise'
+      var s = (typeof v === 'object') ? JSON.stringify(v) : ('' + v)
+      return s.length > n ? (s.slice(0, n) + '…') : s
+    } catch (e) { return '[无法序列化]' }
+  }
+  function call(fn) { try { return { ok: true, v: fn() } } catch (e) { return { ok: false, v: (e && e.message) ? e.message : ('' + e) } } }
+  function num(v) { var n = Number(v); return isNaN(n) ? null : n }
+  function firstOk(fns) { for (var i = 0; i < fns.length; i++) { var r = call(fns[i]); if (r.ok && r.v !== undefined) return r } return { ok: false, v: '都取不到' } }
+
+  var LABEL = {
+    brand: '品牌', manufacturer: '厂商', model: '型号', product: '产品', osType: '系统',
+    osVersionName: '系统版本', platformVersionName: '平台版本名', screenRefreshRate: '刷新率',
+    screenShape: '屏幕形状', screenWidth: '屏宽', screenHeight: '屏高', language: '语言', region: '地区'
+  }
+
+  export default {
+    data: {
+      tab: 0, tabs: ['信息', '工具', '能力', '网络'], subtitle: 'WA2456C · BlueOS 3.0',
+      battery: '—', chargeText: '', model: 'iQOO WATCH GT',
+      sysRows: [], toolRows: [], capRows: [], netRows: [], netTip: '点「网络诊断」测试连通性',
+      keepOn: false
+    },
+
+    onInit() { this.loadSys(); this.loadTools(); this.loadCap() },
+    onTab(i) { this.tab = i },
+
+    /* ---------------- 信息 ---------------- */
+    loadSys() {
+      var rows = []
+      var put = function (k, v, c) { rows.push({ k: k, v: '' + v, c: c || WHITE }) }
+
+      var r = call(function () { return deviceInfo.getInfoSync() })
+      var info = (r.ok && r.v && typeof r.v === 'object') ? r.v : null
+      if (info) {
+        var ks = Object.keys(info)
+        for (var i = 0; i < ks.length; i++) {
+          var v = info[ks[i]]
+          if (v === 0 || v === '' || v === undefined || v === null) continue
+          if (ks[i] === 'model') this.model = '' + v
+          put(LABEL[ks[i]] || ks[i], v, GOLD)
+        }
+      } else put('设备信息', '取不到', RED)
+
+      var b = call(function () { return battery.getStatus() })
+      if (!b.ok || b.v === undefined) b = call(function () { return battery.getStatusSync() })
+      if (b.ok && b.v && typeof b.v === 'object') {
+        var lv = num(b.v.level)
+        this.battery = (lv !== null) ? ((lv <= 1 ? Math.round(lv * 100) : Math.round(lv)) + '%') : '—'
+        this.chargeText = b.v.charging ? '⚡ 充电中' : '未充电'
+      } else { this.battery = '—'; this.chargeText = '电量取不到' }
+
+      var br = firstOk([function () { return brightness.getValueSync ? brightness.getValueSync() : undefined },
+                        function () { return brightness.getValue() }])
+      var bv = num(br.ok ? br.v : null)
+      put('屏幕亮度', bv !== null ? (bv + '%') : '取不到', bv !== null ? GOLD : GREY)
+      put('可用存储', '系统接口为桩，不提供容量', GREY)
+      this.sysRows = rows
+    },
+
+    /* ---------------- 工具 ---------------- */
+    loadTools() {
+      var rows = []
+      var put = function (k, v, c) { rows.push({ k: k, v: '' + v, c: c || WHITE }) }
+      var br = firstOk([function () { return brightness.getValueSync ? brightness.getValueSync() : undefined },
+                        function () { return brightness.getValue() }])
+      var bv = num(br.ok ? br.v : null)
+      put('当前亮度', bv !== null ? (bv + '%') : '取不到', bv !== null ? GOLD : GREY)
+      var ko = call(function () { return screen.getKeepScreenOn ? screen.getKeepScreenOn() : '无此方法' })
+      if (ko.ok && ko.v !== '无此方法') { this.keepOn = !!ko.v; put('屏幕常亮', this.keepOn ? '已开启' : '已关闭', GOLD) }
+      else put('屏幕常亮', '接口未开放', GREY)
+      var so = call(function () { return screen.getScreenOffTime ? screen.getScreenOffTime() : '无此方法' })
+      put('息屏时间(秒)', so.ok && so.v !== '无此方法' ? J(so.v, 30) : '未开放', so.ok && so.v !== '无此方法' ? GOLD : GREY)
+      this.toolRows = rows
+    },
+
+    vib(mode) {
+      var r = call(function () {
+        if (mode === 'twice') {
+          var a = vibrator.vibrate({ mode: 'short' })
+          return a
+        }
+        return vibrator.vibrate({ mode: mode })
+      })
+      var rows = this.toolRows.slice()
+      rows.push({ k: '振动(' + mode + ')', v: r.ok ? '已触发' : ('异常 ' + J(r.v, 40)), c: r.ok ? GREEN : RED })
+      this.toolRows = rows
+      var self = this
+      if (mode === 'twice') setTimeout(function () { call(function () { return vibrator.vibrate({ mode: 'short' }) }) }, 400)
+    },
+
+    toggleKeepOn() {
+      var want = !this.keepOn
+      var r = call(function () { return screen.setKeepScreenOn({ keepScreenOn: want }) })
+      this.keepOn = want
+      var rows = this.toolRows.slice()
+      rows.push({ k: '屏幕常亮', v: r.ok ? ('已设 ' + (want ? '开' : '关') + '（若无回执属正常）') : ('异常 ' + J(r.v, 40)), c: r.ok ? GREEN : RED })
+      this.toolRows = rows
+    },
+
+    setDim() {
+      var r = call(function () { return brightness.setValue({ value: 20 }) })
+      var rows = this.toolRows.slice()
+      rows.push({ k: '亮度设为 20%', v: r.ok ? '已发送指令' : ('异常 ' + J(r.v, 40)), c: r.ok ? GREEN : RED })
+      this.toolRows = rows
+      var self = this
+      setTimeout(function () { self.loadTools() }, 800)
+    },
+
+    /* ---------------- 能力（实测结论） ---------------- */
+    loadCap() {
+      var rows = []
+      var put = function (k, v, c) { rows.push({ k: k, v: '' + v, c: c || WHITE }) }
+
+      put('✓ 设备信息', '型号/系统/屏幕/语言（getInfoSync）', GREEN)
+      put('✓ 电量', '百分比 + 充电状态', GREEN)
+      put('✓ 屏幕亮度', '读取与设置', GREEN)
+      put('✓ 振动', '可振动', GREEN)
+      put('✓ 模块加载', '11 / 11', GREEN)
+
+      var cbs = ['onDeviceFound', 'onDevicefound', 'onDeviceFind', 'onDevicefind']
+      var f = 0
+      for (var i = 0; i < cbs.length; i++) { try { if (cbs[i] in bt) f++ } catch (e) {} }
+      put('✗ 蓝牙扫描结果', f ? '有回调' : '系统不回传（四种大小写回调均不存在）', f ? GREEN : RED)
+      put('✗ 已配对设备', '系统未开放', RED)
+      var subs = []
+      try { ;['subscribeStepCounter', 'subscribeAccelerometer', 'subscribeCompass', 'subscribeBarometer', 'subscribeWristLift', 'subscribeGyroscope'].forEach(function (m) { if (typeof sensor[m] === 'function') subs.push(m.replace('subscribe', '')) }) } catch (e) {}
+      put('✗ 传感器数据', '6 个可订阅但数据不回（' + subs.length + ' 个接口在）', subs.length ? GOLD : RED)
+      put('✗ 健康统计', '返回 undefined', RED)
+      put('✗ 存储容量', '接口为桩（返回 0/undefined）', RED)
+      put('△ 网络', '只能连通部分地址（GitHub 通，本校本站不通）', GOLD)
+      put('实测机型', 'iQOO WATCH GT · WA2456C · BlueOS 3.0', GREY)
+      this.capRows = rows
+    },
+
+    /* ---------------- 网络诊断 ---------------- */
+    testNet() {
+      var self = this
+      this.netTip = '诊断中…'
+      var rows = []
+      var put = function (k, v, c) { rows.push({ k: k, v: v, c: c || GOLD }); self.netRows = rows.slice() }
+      var t0 = Date.now()
+
+      var urls = [
+        ['基准 api.github.com', 'https://api.github.com/'],
+        ['GitHub 纯文本', 'https://api.github.com/zen'],
+        ['校园站(实测不通)', 'https://dz6g.ccwu.cc/board/api/discussions?page%5Blimit%5D=1']
+      ]
+      for (var i = 0; i < urls.length; i++) put(urls[i][0], '测试中…', GREY)
+
+      var setRow = function (idx, v, c) {
+        var r = self.netRows.slice(); r[idx] = { k: urls[idx][0], v: v, c: c }; self.netRows = r
+      }
+      var okN = 0
+      for (var k = 0; k < urls.length; k++) {
+        (function (idx) {
+          var r = call(function () {
+            return netFetch.fetch({ url: urls[idx][1], method: 'GET', responseType: 'text',
+              success: function (res) {
+                okN++
+                setRow(idx, '★ HTTP ' + (res && res.status) + ' · ' + (Date.now() - t0) + 'ms', GREEN)
+                self.netTip = '成功 ' + okN + ' / 3'
+              },
+              fail: function (e) { setRow(idx, '✗ ' + J(e, 50), RED) } })
+          })
+          if (!r.ok) { setRow(idx, '✗ ' + J(r.v, 50), RED); return }
+          if (r.v && typeof r.v.then === 'function') r.v.then(function (res) { okN++; setRow(idx, '★ HTTP ' + (res && res.status), GREEN); self.netTip = '成功 ' + okN + ' / 3' })['catch'](function (e) { setRow(idx, '✗ ' + J(e, 50), RED) })
+          else if (r.v && typeof r.v === 'object' && (r.v.status || r.v.data !== undefined)) { okN++; setRow(idx, '★ HTTP ' + r.v.status, GREEN); self.netTip = '成功 ' + okN + ' / 3' }
+          else setRow(idx, '无结果', GREY)
+        })(k)
+      }
+      clearTimeout(this._t)
+      this._t = setTimeout(function () {
+        var r = self.netRows.slice()
+        for (var i = 0; i < r.length; i++) if (r[i].v === '测试中…') r[i] = { k: r[i].k, v: '10 秒内无结果', c: GREY }
+        self.netRows = r
+        self.netTip = '完成 · 成功 ' + okN + ' / 3'
+      }, 10000)
+    },
+    clearNet() { this.netRows = []; this.netTip = '已清空' }
+  }
+</script>

@@ -1,0 +1,6 @@
+<script>
+export default {
+  onCreate() { console.log('[蓝牙信息] app created') },
+  onDestroy() {}
+}
+</script>

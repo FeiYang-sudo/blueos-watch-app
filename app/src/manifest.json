@@ -1,0 +1,133 @@
+{
+  "package": "com.dz6g.watchinfo",
+  "name": "手表信息",
+  "versionName": "4.1.0",
+  "versionCode": 21,
+  "appCategory": [
+    "other"
+  ],
+  "icon": "/assets/images/logo.png",
+  "deviceTypeList": [
+    "watch-round",
+    "watch-square"
+  ],
+  "config": {
+    "designWidth": 466,
+    "debug": false
+  },
+  "display": {
+    "backgroundColor": "#0b0b0b"
+  },
+  "minPlatformVersion": 1070,
+  "features": [
+    {
+      "name": "blueos.hardware.deviceInfo"
+    },
+    {
+      "name": "system.device"
+    },
+    {
+      "name": "blueos.hardware.battery"
+    },
+    {
+      "name": "system.battery"
+    },
+    {
+      "name": "blueos.storage.statvfs"
+    },
+    {
+      "name": "blueos.wifi.wifimanager"
+    },
+    {
+      "name": "blueos.network.networkManager"
+    },
+    {
+      "name": "system.network"
+    },
+    {
+      "name": "blueos.hardware.vibrator"
+    },
+    {
+      "name": "system.vibrator"
+    },
+    {
+      "name": "blueos.hardware.display.brightness"
+    },
+    {
+      "name": "system.brightness"
+    },
+    {
+      "name": "blueos.hardware.sensor"
+    },
+    {
+      "name": "system.sensor"
+    },
+    {
+      "name": "blueos.health.healthManager"
+    },
+    {
+      "name": "blueos.storage.localStorage"
+    },
+    {
+      "name": "system.storage"
+    },
+    {
+      "name": "blueos.app.appmanager.router"
+    },
+    {
+      "name": "system.router"
+    },
+    {
+      "name": "blueos.bluetooth.bluetoothManager"
+    },
+    {
+      "name": "system.bluetooth"
+    },
+    {
+      "name": "blueos.window.prompt"
+    },
+    {
+      "name": "system.prompt"
+    },
+    {
+      "name": "blueos.network.fetch"
+    },
+    {
+      "name": "system.fetch"
+    },
+    {
+      "name": "blueos.bluetooth.ble"
+    },
+    {
+      "name": "blueos.bluexlink.connectionManager"
+    },
+    {
+      "name": "system.interconnect"
+    },
+    {
+      "name": "blueos.hardware.display.screen"
+    },
+    {
+      "name": "system.screen"
+    },
+    {
+      "name": "blueos.hardware.display.aod"
+    }
+  ],
+  "permissions": [
+    {
+      "name": "watch.permission.DEVICE_INFO"
+    },
+    {
+      "name": "watch.permission.BLUETOOTH"
+    }
+  ],
+  "router": {
+    "entry": "pages/Home",
+    "pages": {
+      "pages/Home": {
+        "component": "index"
+      }
+    }
+  }
+}

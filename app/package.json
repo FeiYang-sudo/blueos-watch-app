@@ -1,0 +1,10 @@
+{
+  "name": "blueos-watch-info",
+  "version": "4.1.0",
+  "description": "vivo/iQOO 蓝河(BlueOS)手表应用 · 手表信息与能力诊断",
+  "private": true,
+  "scripts": {
+    "build": "bash tools/build.sh app",
+    "release": "cd app && jax release"
+  }
+}
