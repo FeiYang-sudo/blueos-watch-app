@@ -8,13 +8,11 @@
 
 ## 📸 截图
 
-> 待补充：信息页 / 工具页 / 能力页 / 网络页 → 将放入 `docs/images/`
+**信息页** —— 电量大字（含充电状态）+ 设备信息，整页可滚动
 
-<!-- 图片就位后取消注释
-| 信息 | 工具 | 能力 | 网络 |
-|---|---|---|---|
-| ![信息](docs/images/01-info.png) | ![工具](docs/images/02-tools.png) | ![能力](docs/images/03-capability.png) | ![网络](docs/images/04-network.png) |
--->
+<img src="docs/images/01-info.png" width="330" alt="信息页">
+
+> 工具页 / 能力页 / 网络页 截图待补充（`docs/images/02-tools.png`、`03-capability.png`、`04-network.png`）
 
 ## 功能
 
