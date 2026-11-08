@@ -1,0 +1,6 @@
+<script>
+  export default {
+    onCreate() { console.log('[转盘] app created') },
+    onDestroy() {}
+  }
+</script>

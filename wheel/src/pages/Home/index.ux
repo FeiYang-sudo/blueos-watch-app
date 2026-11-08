@@ -1,0 +1,1291 @@
+<template>
+  <div class="page" ontouchstart="onPressStart" ontouchend="onPressEnd" ontouchcancel="onPressEnd">
+
+    <!-- ==================== 转盘 ==================== -->
+    <block if="{{view === 'wheel'}}">
+      <canvas id="wheelCanvas" class="cv" width="466" height="466"></canvas>
+
+      <!-- 标签层：整屏 466×466，与 canvas 同尺寸同左上角 => 圆心严格重合
+           每个标签用绝对 left/top 落位（角度与半径在 JS 里算成直角坐标），
+           不用 transform / flex / margin-top —— v1.1 的 bug 就出在这三者耦合 -->
+      <div class="labels">
+        <text class="lbl" for="{{(i, s) in sectors}}"
+              style="left: {{s.x}}px; top: {{s.y}}px; width: {{s.lw}}px; font-size: {{s.fs}}px; color: {{s.tc}};">{{s.t}}</text>
+      </div>
+
+      <div class="hub" style="background-color: {{hubBg}}; border-color: {{hubBd}}; transform: scale({{hubScale}});" onclick="onHub">
+        <text class="hubtxt" style="font-size: {{hubFs}}px; color: {{hubColor}};">{{hubText}}</text>
+      </div>
+
+      <!-- v1.4.0：转盘页顶部显示当前列表名（小字，避开车轮与外圈） -->
+      <text class="wname">{{listName}}</text>
+      <text class="hint" onclick="toEdit">长按屏幕 · 编辑</text>
+    </block>
+
+    <!-- ==================== 结果（保留转盘 + 高亮） ==================== -->
+    <block elif="{{view === 'result'}}">
+      <canvas id="resultCanvas" class="cv" width="466" height="466"></canvas>
+
+      <div class="rlabels">
+        <text class="lbl" for="{{(i, s) in rsectors}}"
+              style="left: {{s.x}}px; top: {{s.y}}px; width: {{s.lw}}px; font-size: {{s.fs}}px; color: {{s.tc}};">{{s.t}}</text>
+      </div>
+
+      <div class="rring" style="transform: scale({{halo}}); opacity: {{haloO}};"></div>
+
+      <text class="rtip">本次结果</text>
+      <text class="rname" style="font-size: {{rfs}}px;">{{resultText}}</text>
+      <div class="rrow">
+        <input type="button" class="rbtn" value="再转一次" onclick="again" />
+        <input type="button" class="rbtn2" value="返回" onclick="back" />
+      </div>
+    </block>
+
+    <!-- ==================== 编辑 ==================== -->
+    <block elif="{{view === 'edit'}}">
+      <text class="etitle">项目 · {{items.length}}/12</text>
+
+      <!-- 列表切换：文件里有多张列表时才显示箭头 -->
+      <div class="eswitcher">
+        <text class="earrow" if="{{lists.length > 1}}" onclick="prevList">◂</text>
+        <text class="elname">{{listName}}</text>
+        <text class="earrow" if="{{lists.length > 1}}" onclick="nextList">▸</text>
+      </div>
+
+      <list class="elist">
+        <list-item class="erow" for="{{(i, it) in items}}">
+          <div class="edot" style="background-color: {{it.c}};"></div>
+          <text class="ename">{{it.n}}</text>
+          <text class="eup" onclick="moveUp(i)">↑</text>
+          <text class="edel" onclick="delItem(i)">✕</text>
+        </list-item>
+      </list>
+      <text class="ehint">{{phoneMsg}}</text>
+      <div class="erow2">
+        <input type="button" class="ebtn add" value="+ 添加" onclick="toAdd" />
+        <input type="button" class="ebtn" value="恢复" onclick="resetItems" />
+        <input type="button" class="ebtn go" value="完成" onclick="backToWheel" />
+      </div>
+      <text class="esrc">{{srcLabel}}</text>
+      <text class="ever" onclick="syncPhone">重读数据源 · v1.4.0</text>
+    </block>
+
+    <!-- ==================== 从预设词库添加（v1.4.0） ====================
+         词库来自 src/common/presets.js；芯片用绝对 left/top 落位（和标签层同一套
+         已验证的做法，不用 flex-wrap，避免布局在表上不可控）。
+         已存在的词置灰（on=0），点了只提示不添加。 -->
+    <block elif="{{view === 'add'}}">
+      <text class="atitle">{{addTitle}}</text>
+
+      <div class="atabs">
+        <div class="atab" for="{{(g, t) in presetTabs}}"
+             style="background-color: {{t.bg}};" onclick="setGroup(g)">
+          <text class="atabtx" style="color: {{t.fg}};">{{t.n}}</text>
+        </div>
+      </div>
+
+      <div class="pchip" for="{{(i, c) in presetChips}}"
+           style="left: {{c.x}}px; top: {{c.y}}px; width: {{c.w}}px; height: {{c.h}}px; background-color: {{c.bg}};"
+           onclick="addPreset(i)">
+        <text class="pchiptx" style="color: {{c.fg}};">{{c.n}}</text>
+      </div>
+
+      <input type="button" class="aback" value="返回" onclick="backFromAdd" />
+      <text class="ahint">点词即加入 · 灰的已在表上</text>
+    </block>
+
+    <!-- 兜底错误提示（v1.3.1）：任何初始化/计算异常都把原因显示在屏幕正中，
+         绝不允许静默黑屏。正常时 errText 为空，这个节点不渲染。 -->
+    <text class="errbox" if="{{errText}}">{{errText}}</text>
+
+  </div>
+</template>
+
+<style>
+  .page { width: 466px; height: 466px; background-color: #0a0a0e; }
+
+  .cv { position: absolute; left: 0px; top: 0px; width: 466px; height: 466px; }
+
+  /* 文字层：与 canvas 完全同尺寸、同左上角 (0,0)，圆心自然重合 (233, 各页 cy)
+     标签不旋转、不依赖 flex 顺序和 margin，只用绝对 left/top —— 不会漂移 */
+  .labels { position: absolute; left: 0px; top: 0px; width: 466px; height: 466px; }
+  .rlabels { position: absolute; left: 0px; top: 0px; width: 466px; height: 466px; }
+  .lbl { position: absolute; text-align: center; font-weight: bold; }
+
+  .hub { position: absolute; left: 179px; top: 179px; width: 108px; height: 108px;
+         border-radius: 54px; border-width: 2px; border-style: solid;
+         flex-direction: column; justify-content: center; align-items: center; }
+  .hubtxt { text-align: center; font-weight: bold; }
+
+  .hint { position: absolute; left: 0px; top: 412px; width: 466px; text-align: center;
+          font-size: 15px; color: #5a5a6b; }
+
+  .rring { position: absolute; left: 102px; top: 15px; width: 262px; height: 262px;
+           border-radius: 131px; border-width: 2px; border-style: solid; border-color: #ffd93d; }
+  .rtip { position: absolute; left: 0px; top: 282px; width: 466px; text-align: center;
+          font-size: 19px; color: #8a8a9c; }
+  .rname { position: absolute; left: 0px; top: 306px; width: 466px; text-align: center;
+           color: #ffffff; font-weight: bold; }
+  .rrow { position: absolute; left: 0px; top: 372px; width: 466px;
+          flex-direction: row; justify-content: center; align-items: center; }
+  .rbtn { width: 150px; height: 52px; border-radius: 26px; margin-right: 6px;
+          font-size: 22px; background-color: #ffd93d; color: #14141a; }
+  .rbtn2 { width: 96px; height: 52px; border-radius: 26px; margin-left: 6px;
+           font-size: 22px; background-color: #24242e; color: #c8c8d4; }
+
+  /* 转盘页顶部列表名（v1.4.0）：车轮外沿 y≈71，指针 y≈33，这条放在 6~28 之间 */
+  .wname { position: absolute; left: 0px; top: 6px; width: 466px; text-align: center;
+           font-size: 15px; color: #8a8a9c; }
+
+  .etitle { position: absolute; left: 0px; top: 20px; width: 466px; text-align: center;
+            font-size: 19px; color: #c8c8d4; }
+  /* 列表名 + 左右切换箭头（只有一张列表时箭头条件渲染隐藏）
+     箭头框宽 44：字形居中，圆心距 ~160，仍在圆屏内 */
+  .eswitcher { position: absolute; left: 0px; top: 52px; width: 466px; height: 34px;
+               flex-direction: row; justify-content: center; align-items: center; }
+  .earrow { width: 44px; text-align: center; font-size: 22px; color: #ffd93d; }
+  .elname { width: 200px; text-align: center; font-size: 18px; color: #e6e6ee; font-weight: bold; }
+  .elist { position: absolute; left: 72px; top: 90px; width: 322px; height: 184px;
+           flex-direction: column; }
+  .erow { flex-direction: row; align-items: center; height: 46px; margin-bottom: 6px;
+          padding-left: 12px; padding-right: 8px; background-color: #17171f; border-radius: 12px; }
+  .edot { width: 13px; height: 13px; border-radius: 6px; margin-right: 10px; }
+  .ename { flex: 1; font-size: 19px; color: #e6e6ee; }
+  /* 上移（v1.4.0）：40px 热区，第一项点上移 = 循环到最后 */
+  .eup { width: 40px; text-align: center; font-size: 20px; color: #ffd93d; }
+  .edel { width: 40px; text-align: center; font-size: 19px; color: #7a7a8c; }
+  .ehint { position: absolute; left: 0px; top: 278px; width: 466px; text-align: center;
+           font-size: 13px; color: #7a7a8c; }
+  .erow2 { position: absolute; left: 0px; top: 300px; width: 466px;
+           flex-direction: row; justify-content: center; align-items: center; }
+  .ebtn { width: 104px; height: 44px; border-radius: 22px; margin-left: 5px; margin-right: 5px;
+          font-size: 18px; background-color: #24242e; color: #d8d8e2; }
+  .ebtn.add { width: 132px; background-color: #2f2b10; color: #ffd93d; }
+  .ebtn.go { background-color: #ffd93d; color: #14141a; }
+  .esrc { position: absolute; left: 0px; top: 352px; width: 466px; text-align: center;
+          font-size: 12px; color: #6e6e80; }
+  .ever { position: absolute; left: 0px; top: 378px; width: 466px; text-align: center;
+          font-size: 12px; color: #5a5a6a; }
+
+  /* ---------- 预设词库页（v1.4.0） ---------- */
+  /* 标题：y=20 处圆屏可用宽度约 189px，font 15 × 最多 11 字 = 165px —— 不会被表框切掉 */
+  .atitle { position: absolute; left: 0px; top: 20px; width: 466px; text-align: center;
+            font-size: 15px; color: #c8c8d4; }
+  .atabs { position: absolute; left: 0px; top: 52px; width: 466px; height: 42px;
+           flex-direction: row; justify-content: center; align-items: center; }
+  .atab { width: 88px; height: 42px; margin-left: 4px; margin-right: 4px; border-radius: 21px;
+          flex-direction: column; justify-content: center; align-items: center; }
+  .atabtx { text-align: center; font-size: 16px; font-weight: bold; }
+  /* 芯片：JS 算好 left/top/宽高，绝对落位（2 列 × 5 行，见 renderAdd） */
+  .pchip { position: absolute; border-radius: 20px;
+           flex-direction: column; justify-content: center; align-items: center; }
+  .pchiptx { text-align: center; font-size: 17px; }
+  .aback { position: absolute; left: 158px; top: 352px; width: 150px; height: 42px;
+           border-radius: 21px; font-size: 18px; background-color: #24242e; color: #d8d8e2; }
+  .ahint { position: absolute; left: 0px; top: 402px; width: 466px; text-align: center;
+           font-size: 12px; color: #5a5a6a; }
+
+  /* v1.3.1 兜底错误框：屏幕正中，红底白字，长消息自动折行 */
+  .errbox { position: absolute; left: 23px; top: 176px; width: 420px;
+            font-size: 15px; color: #ff6b6b; text-align: center;
+            background-color: rgba(40,8,12,0.92); border-radius: 10px;
+            padding: 8px; }
+</style>
+
+<script>
+  /* v1.3.1：模块按 v1.2.0 真机验证过的那套写（源码层面必须用 @blueos.* 别名，
+     编译器才会改写成 @app-module/system.*；直接写 @app-module/* 会 Rollup 解析失败）。
+     已核对 1.2.0 / 1.3.0 的 .vru：两者 require 完全相同 —— 所以问题从来不在 import。
+     网络模块（system.fetch / system.request）已整段删除 —— 探针确认此路不通。 */
+  import storage from '@blueos.storage.localStorage'
+  import prompt from '@blueos.window.prompt'
+  import vibrator from '@blueos.hardware.vibrator'
+  /* 构建期由 tools/import_csv.py 从 src/assets/items.csv|txt 生成，编译时内联进包。
+     运行时不用读文件系统 —— 手表沙箱里也读不到 assets，这条路最稳。 */
+  import BUNDLE from '../../common/items.generated.js'
+  /* v1.4.0：预设词库（吃啥 / 去哪 / 干啥），表上「+ 添加」用 */
+  import PRESETS from '../../common/presets.js'
+
+  /* ---------- 常量 ---------- */
+  /* KEY_ITEMS 是 v1.2.0 就用的键名，保持不变 => 老用户已存的「去哪吃」不会丢 */
+  var KEY_ITEMS = 'wheel_items'
+  var KEY_LISTS = 'wheel_lists'
+  var KEY_CUR = 'wheel_current_list'
+  var KEY_SIG = 'wheel_src_sig'
+  var MAX = 12
+  var CANVAS = 466
+  var CX = 233
+
+  /* 转盘页几何：圆心 (233,233) */
+  var W_CY = 233, W_R = 162, W_HUB = 54
+  /* 结果页几何：圆心 (233,146) */
+  var R_CY = 146, R_R = 120
+
+  /* 标签落位（v1.3 修 bug：标签跑出轮盘）
+     RT_K  —— 标签中心半径 = R × 0.62，让整个标签框（含四角）留在扇区内
+     RIM_K —— 标签框四角到圆心距离上限 = R × 0.92，留 8% 边缘余量 */
+  var RT_K = 0.62
+  var HUB_SAFE = 66            /* 标签框离圆心最近不得小于此值（中心钮半径 60 + 6 余量） */
+  var RIM_K = 0.92
+  var ANG_EPS = 0.008          /* 角向余量 ≈ 0.46°；四角不许贴到扇区分界线 */
+
+  var DEFAULTS = ['火锅', '烧烤', '面条', '饺子', '米饭', '沙拉', '汉堡', '随便']
+  var PALETTE = [
+    '#FF6B6B', '#FF9F45', '#FFD93D', '#A8E05F',
+    '#4ADE80', '#2DD4BF', '#38BDF8', '#818CF8',
+    '#C4B5FD', '#F472B6', '#FB7185', '#A0AEC0'
+  ]
+  var GOLD = '#FFD93D'
+  var INK = '#141414'                       /* 扇区文字：深色，压亮色扇区 */
+
+  /* ---------- 预设词库（v1.4.0） ----------
+     来自 src/common/presets.js；洗成 [{name, words}]，脏数据直接丢掉。
+     放在 try 里：万一词库文件被改坏，也只是没有「添加」可用，不影响转盘。 */
+  function cleanGroups(raw) {
+    var out = []
+    var i, j
+    if (!raw || !raw.length) return out
+    for (i = 0; i < raw.length; i++) {
+      var g = raw[i] || {}
+      var nm = trim(g.name) || ('词库' + (i + 1))
+      var ws = g.words || []
+      var words = []
+      for (j = 0; j < ws.length && words.length < 12; j++) {
+        var w = trim(ws[j])
+        if (w && words.indexOf(w) < 0) words.push(w)
+      }
+      if (words.length) out.push({ name: nm, words: words })
+    }
+    return out
+  }
+  var PRESET_GROUPS = []
+  try { PRESET_GROUPS = cleanGroups(PRESETS) } catch (e) { PRESET_GROUPS = [] }
+  if (!PRESET_GROUPS.length) {
+    /* 兜底：词库文件缺失时至少还能从默认 8 项里挑 */
+    PRESET_GROUPS = [{ name: '默认', words: DEFAULTS.slice(0, MAX) }]
+  }
+
+  /* ---------- 小工具 ---------- */
+  function put(vm, k, v) {
+    try { if (typeof vm.$set === 'function') { vm.$set(k, v); return } } catch (e) {}
+    vm[k] = v
+  }
+  function getEl(vm, id) {
+    var el = null
+    try { if (typeof vm.$element === 'function') el = vm.$element(id) } catch (e) {}
+    if (!el) { try { if (vm.$refs) el = vm.$refs[id] } catch (e) {} }
+    return el || null
+  }
+  function toast(msg) {
+    try { prompt.showToast({ message: msg, duration: 2000 }) } catch (e) {}
+  }
+  function buzz(times) {
+    try {
+      var n = 0
+      var t = setInterval(function () {
+        n++
+        try { vibrator.vibrate({ mode: 'short' }) } catch (e) {}
+        if (n >= times) clearInterval(t)
+      }, 130)
+    } catch (e) {}
+  }
+  function hexA(hex, a) {
+    var h = String(hex || '#ffffff').replace('#', '')
+    if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2)
+    var n = parseInt(h, 16)
+    if (isNaN(n)) return 'rgba(255,255,255,' + a + ')'
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'
+  }
+  function norm(a) { a = a % 360; return a < 0 ? a + 360 : a }
+  function r2(a) { return Math.round(a * 100) / 100 }
+  function cut(s, n) {
+    s = String(s === undefined || s === null ? '' : s)
+    return s.length > n ? s.slice(0, n) + '…' : s
+  }
+
+  /* ---------- 存储（K-V，值统一存 JSON 字符串） ---------- */
+  function readJSON(k) {
+    try {
+      var raw = null
+      if (typeof storage.getSync === 'function') raw = storage.getSync(k)
+      else if (typeof storage.get === 'function') raw = storage.get({ key: k })
+      if (raw && typeof raw === 'object' && raw.data !== undefined) raw = raw.data
+      if (typeof raw === 'string' && raw) return JSON.parse(raw)
+    } catch (e) {}
+    return null
+  }
+  function writeJSON(k, v) {
+    try {
+      var raw = JSON.stringify(v)
+      if (typeof storage.setSync === 'function') storage.setSync(k, raw)
+      else storage.set({ key: k, value: raw })
+    } catch (e) { console.log('[转盘] 存储失败 ' + k + ' ' + e) }
+  }
+
+  /* ---------- 颜色 / 文案 ---------- */
+  function colorAt(i) { return PALETTE[i % PALETTE.length] }
+
+  /* ---------- 内置列表（构建期常量 / 构建期生成的文件） ---------- */
+  function trim(s) {
+    return String(s === undefined || s === null ? '' : s).replace(/^\s+/, '').replace(/\s+$/, '')
+  }
+  function bundleSource() {
+    var s = ''
+    try { s = trim(BUNDLE && BUNDLE.source ? BUNDLE.source : '') } catch (e) { s = '' }
+    return s || '内置默认'
+  }
+  /* 把 BUNDLE 洗成 [{name, items, trunc}]，坏数据一律退化到内置 8 项 */
+  function buildBundleLists() {
+    var src = []
+    var out = []
+    try { if (BUNDLE && BUNDLE.lists) src = BUNDLE.lists } catch (e) { src = [] }
+    for (var i = 0; i < src.length; i++) {
+      var L = src[i] || {}
+      var nm = trim(L.name) || '默认'
+      var arr = L.items || []
+      var items = []
+      for (var j = 0; j < arr.length && items.length < MAX; j++) {
+        var v = trim(arr[j])
+        if (v) items.push(v)
+      }
+      if (items.length >= 2) out.push({ name: nm, items: items, trunc: Number(L.trunc) || 0 })
+    }
+    if (!out.length) out.push({ name: '默认', items: DEFAULTS.slice(0, MAX), trunc: 0 })
+    return out
+  }
+  var BUNDLE_LISTS = buildBundleLists()
+  function signature() {
+    var parts = [bundleSource()]
+    for (var i = 0; i < BUNDLE_LISTS.length; i++) {
+      parts.push(BUNDLE_LISTS[i].name + ':' + BUNDLE_LISTS[i].items.join('/'))
+    }
+    return parts.join('|')
+  }
+  /* 数据版本指纹：换了 items.csv 重新出包，指纹变 -> 首次启动重新铺数据 */
+  var BUNDLE_SIG = signature()
+  function cloneLists(src) {
+    var out = []
+    for (var i = 0; i < src.length; i++) {
+      out.push({ name: src[i].name, items: src[i].items.slice(0, MAX), trunc: src[i].trunc || 0 })
+    }
+    return out
+  }
+
+  /* 扇区文字：最多 3 个字（超长时 2 字 + …，保证框内单行不折行） */
+  function textOf(name) {
+    var s = String(name === undefined || name === null ? '' : name)
+    return s.length > 3 ? s.slice(0, 2) + '…' : s
+  }
+
+  /*
+   * 单个标签框（轴对齐 lw × fs*1.44）在某角度下是否合格
+   *   |角偏|      <= half - ANG_EPS      （不越过扇区分界线）
+   *   四角半径     <= rimMax             （不跑出轮盘）
+   *   四角半径     >= hubSafe            （不压到中心钮，0 = 不检查）
+   * 角度按 0.5° 采样 0~90°（轴对齐框以 90° 为周期），覆盖任意 spin。
+   */
+  function labelFits(lw, fs, rt, angDeg, half, rimMax, hubSafe) {
+    var k = Math.PI / 180
+    var rad = angDeg * k
+    var ux = Math.sin(rad), uy = -Math.cos(rad)      /* 径向单位向量（屏幕坐标） */
+    var vx = -uy, vy = ux                            /* 切向单位向量 */
+    var ax = rt * ux, ay = rt * uy                   /* 标签框锚点（相对圆心） */
+    var hw = lw / 2
+    var hh = fs * 0.72                               /* 半行高：实际渲染 ≈1.4fs，这里按 1.44fs 留余量 */
+    var dxs = [-hw, hw], dys = [-hh, hh]
+    var lim = half - ANG_EPS
+    for (var i = 0; i < 2; i++) {
+      for (var j = 0; j < 2; j++) {
+        var px = ax + dxs[i], py = ay + dys[j]
+        var rr2 = px * px + py * py
+        if (rr2 > rimMax * rimMax) return false
+        if (hubSafe > 0 && rr2 < hubSafe * hubSafe) return false
+        var tang = px * vx + py * vy
+        var radi = px * ux + py * uy
+        if (radi < 1) radi = 1
+        var off = Math.atan2(tang, radi)
+        if (off > lim || off < -lim) return false
+      }
+    }
+    return true
+  }
+
+  /* 全部采样角都过 -> 这套 lw/fs 可用 */
+  function sizeOk(lw, fs, rt, half, rimMax, hubSafe) {
+    for (var a = 0; a < 90; a += 0.5) {
+      if (!labelFits(lw, fs, rt, a, half, rimMax, hubSafe)) return false
+    }
+    return true
+  }
+
+  /* ---------- 尺寸缓存（v1.3.1：绝不在动画帧里搜索） ----------
+     SIZE_CACHE  key = n|r|rt|hubSafe   —— 只跟几何和应用无关的东西有关
+     LAYOUT_CACHE key = n|r|rt|hubSafe|文字1|文字2|...  —— 文字变了自然换 key
+     两个缓存都有上限，超了整表丢弃（手表内存小，宁可重算一次）。 */
+  var SIZE_CACHE = {}
+  var SIZE_N = 0
+  var SIZE_MAX = 48
+
+  function sizeKey(n, r, rt, hubSafe) {
+    return n + '|' + Math.round(r) + '|' + Math.round(rt) + '|' + (hubSafe || 0)
+  }
+
+  /* 字号 / 框宽：从弦长上限往下试，直到四角全部合格。
+     只在缓存未命中时调用（首次进页面 / 项目数或文字变了）。 */
+  function pickSizes(maxLen, n, r, rt, hubSafe) {
+    var ck = sizeKey(n, r, rt, hubSafe) + '|' + maxLen
+    var hit = SIZE_CACHE[ck]
+    if (hit) return hit
+    var half = Math.PI / n
+    var rimMax = r * RIM_K
+    /* 上限：弦长、外缘余量、中心钮外沿 三者取小 */
+    var wChord = 2 * rt * Math.sin(half) * 0.98
+    var wRad = 2 * (rimMax - rt) * 0.92
+    var wHub = hubSafe > 0 ? 2 * (rt - hubSafe) * 0.98 : 1e9
+    var wCap = Math.min(wChord, wRad, wHub, 220)
+    var w = Math.floor(wCap)
+    var f = 13
+    var best = null
+    /* 先 2px 粗扫找到第一个能过的宽度，再向上 1px 精修（最多 2 次）。
+       labelFits 对 w 单调：w 小 <=> 框更小，所以粗扫不会漏掉更优解。 */
+    for (; w >= 18; w -= 2) {
+      f = Math.floor(w / maxLen * 0.96)
+      if (f > 26) f = 26
+      if (f < 11) f = 11
+      if (f * maxLen > w) continue                 /* 一行装不下，跳过 */
+      if (sizeOk(w, f, rt, half, rimMax, hubSafe)) { best = { lw: w, fs: f }; break }
+    }
+    if (best) {
+      /* 精修：粗扫可能少了 1px 宽度 */
+      for (var up = 1; up <= 2; up++) {
+        var w2 = best.lw + up
+        var f2 = Math.floor(w2 / maxLen * 0.96)
+        if (f2 > 26) f2 = 26
+        if (f2 < 11) f2 = 11
+        if (f2 * maxLen > w2) break
+        if (!sizeOk(w2, f2, rt, half, rimMax, hubSafe)) break
+        best = { lw: w2, fs: f2 }
+      }
+    } else {
+      /* 兜底：极窄时用最小可用尺寸（断言会把这种情况抓出来） */
+      f = 11
+      best = { lw: Math.max(18, f * maxLen), fs: f }
+    }
+    if (SIZE_N >= SIZE_MAX) { SIZE_CACHE = {}; SIZE_N = 0 }
+    SIZE_CACHE[ck] = best
+    SIZE_N++
+    return best
+  }
+
+  /* 每帧真正会走到的入口：命中就是一次字典查找 + O(n) 字符串拼接 */
+  var LAYOUT_CACHE = {}
+  var LAYOUT_N = 0
+  var LAYOUT_MAX = 32
+
+  function layoutFor(items, r, rt, hubSafe) {
+    var n = items.length
+    var texts = []
+    var maxLen = 1
+    var j, t
+    var k = sizeKey(n, r, rt, hubSafe)
+    for (j = 0; j < n; j++) {
+      t = textOf(items[j].n)
+      texts.push(t)
+      k += '|' + t
+      if (t.length > maxLen) maxLen = t.length
+    }
+    var hit = LAYOUT_CACHE[k]
+    if (hit) return hit
+    var sz = pickSizes(maxLen, n, r, rt, hubSafe)
+    var out = { texts: texts, lw: sz.lw, fs: sz.fs }
+    if (LAYOUT_N >= LAYOUT_MAX) { LAYOUT_CACHE = {}; LAYOUT_N = 0 }
+    LAYOUT_CACHE[k] = out
+    LAYOUT_N++
+    return out
+  }
+
+  /*
+   * 生成扇区标签的屏幕坐标（绝对 left/top，标签本身不旋转）
+   *   items  项目
+   *   r      扇区半径
+   *   cy     圆心 y（x 恒为 CX=233）
+   *   dim    中奖下标（-1 = 不压暗）
+   *   spin   当前旋转角（度）；角度直接算进直角坐标，文字层不做 transform
+   *
+   * 角度 = spin + i*seg + seg/2 —— 与 canvas 里扇区中线 -90+i*seg+seg/2+spin 一致
+   * 半径 = r × 0.62（v1.2 是 0.66~0.74，标签框外沿会甩出圆盘）
+   *
+   * 性能：每帧只做 O(n) 三角函数；宽度/字号走 layoutFor 缓存，不做任何搜索。
+   */
+  function makeSectors(items, r, cy, dim, spin, hubSafe) {
+    var n = items.length
+    var out = []
+    if (!n) return out
+    var seg = 360 / n
+    var sp = spin || 0
+    var rt = r * RT_K
+    var i
+
+    var lo = layoutFor(items, r, rt, hubSafe || 0)
+    var texts = lo.texts
+    var lw = lo.lw
+    var fs = lo.fs
+
+    var k = Math.PI / 180
+    for (i = 0; i < n; i++) {
+      var tc = INK
+      if (dim >= 0 && dim !== i) tc = 'rgba(10,10,16,0.55)'
+      var a = norm(sp + i * seg + seg / 2)
+      var rad = a * k
+      out.push({
+        a: r2(a),
+        t: texts[i],
+        lw: lw,
+        fs: fs,
+        x: r2(CX + rt * Math.sin(rad) - lw / 2),
+        y: r2(cy - rt * Math.cos(rad) - fs * 0.72),
+        tc: tc
+      })
+    }
+    return out
+  }
+
+  export default {
+    data: {
+      view: 'wheel',
+      spin: 0,
+      spinning: false,
+      resultIdx: -1,
+      resultText: '',
+      rfs: 54,
+      items: [],
+      lists: [],
+      listIdx: 0,
+      listName: '',
+      srcLabel: '',
+      sectors: [],
+      rsectors: [],
+      hubText: '开始',
+      hubFs: 30,
+      hubBg: GOLD,
+      hubBd: GOLD,
+      hubColor: '#14141a',
+      hubScale: 1,
+      halo: 1,
+      haloO: 0.6,
+      phoneMsg: '',
+      errText: '',
+      /* v1.4.0：预设词库页 */
+      addGroup: 0,
+      addTitle: '',
+      presetTabs: [],
+      presetChips: [],
+      srcStale: 0
+    },
+
+    /* ============ 生命周期 ============ */
+    onInit() {
+      /* v1.3.1：v1.3.0 就是在这里抛 ReferenceError(KEY_ITEMS) 导致整页不挂载 = 黑屏。
+         现在任何异常都会把错误文字画到屏幕上，绝不静默黑屏。 */
+      try {
+        this.loadItems()
+      } catch (e) {
+        this.fail(e, 'init')
+      }
+    },
+    onReady() {
+      try {
+        this.drawWithRetry(6)
+      } catch (e) {
+        this.fail(e, 'ready')
+      }
+    },
+    onShow() {
+      if (!this.spinning && this.resultIdx < 0) this.updateHub()
+    },
+    onHide() { this.stopBreath() },
+    onDestroy() {
+      this.stopBreath()
+      if (this._timer) clearInterval(this._timer)
+      if (this._pt) clearTimeout(this._pt)
+      if (this._t1) clearTimeout(this._t1)
+      if (this._pop) clearInterval(this._pop)
+      if (this._rst) clearTimeout(this._rst)
+      if (this._dt) clearTimeout(this._dt)
+      if (this._drt) clearTimeout(this._drt)
+    },
+
+    /* ============ 数据 ============ */
+    /* v1.4.0：**本地存储优先**。
+       只要存储里有 ≥1 张可用列表，就一律沿用 —— 表上改过的项目必须活下来，
+       绝不因为「重新出了包 / csv 变了」而被覆盖（v1.3.x 是指纹变了就重铺，会把用户
+       在表上删掉的项目偷偷加回来）。
+       只有存储为空时才铺 csv 生成物；v1.2 只存了 wheel_items 的老用户迁移成单列表。
+       csv 真的换了想生效：编辑页底部「重读数据源」。 */
+    loadItems() {
+      var lists = readJSON(KEY_LISTS)
+      var sig = readJSON(KEY_SIG)
+      var idx = readJSON(KEY_CUR)
+
+      var valid = []
+      if (lists && lists.length) {
+        for (var i = 0; i < lists.length; i++) {
+          var L = lists[i] || {}
+          var nm = trim(L.name) || '默认'
+          var arr = L.items || []
+          var its = []
+          for (var j = 0; j < arr.length && its.length < MAX; j++) {
+            var v = trim(arr[j])
+            if (v) its.push(v)
+          }
+          if (its.length >= 2) valid.push({ name: nm, items: its, trunc: Number(L.trunc) || 0 })
+        }
+      }
+
+      var seed = false
+      if (valid.length === 0) {
+        /* 存储空 -> 先看 v1.2 的旧键（单数组），再退化到 csv 生成物 */
+        var legacy = readJSON(KEY_ITEMS)
+        var mig = []
+        if (legacy && legacy.length) {
+          for (var a = 0; a < legacy.length && mig.length < MAX; a++) {
+            var lv = trim(legacy[a])
+            if (lv && mig.indexOf(lv) < 0) mig.push(lv)
+          }
+        }
+        if (mig.length >= 2) {
+          var base0 = BUNDLE_LISTS[0] || { name: '默认', items: DEFAULTS.slice(0, MAX), trunc: 0 }
+          valid = [{ name: base0.name, items: mig, trunc: 0 }]
+        } else {
+          valid = cloneLists(BUNDLE_LISTS)
+          seed = true
+        }
+        idx = 0
+      }
+      if (typeof idx !== 'number' || idx < 0 || idx >= valid.length) {
+        idx = 0
+      }
+
+      put(this, 'lists', valid)
+      /* stale 必须在 loadList 之前置好：srcLabel 是在 loadList 里拼的 */
+      put(this, 'srcStale', (sig !== BUNDLE_SIG && !seed) ? 1 : 0)
+      this.loadList(idx)
+      if (seed || sig !== BUNDLE_SIG) this.persist()
+    },
+
+    /* 把当前 lists / 当前下标 / 指纹写回存储 */
+    persist() {
+      writeJSON(KEY_LISTS, this.lists)
+      writeJSON(KEY_CUR, this.listIdx)
+      writeJSON(KEY_SIG, BUNDLE_SIG)
+    },
+
+    /* 载入第 idx 张列表 -> items + 几何 + 界面文案 */
+    loadList(idx) {
+      var lists = this.lists || []
+      if (!lists.length) return
+      if (idx < 0) idx = 0
+      if (idx >= lists.length) idx = lists.length - 1
+      var L = lists[idx]
+      put(this, 'listIdx', idx)
+      put(this, 'listName', cut(L.name, 8))
+      put(this, 'resultIdx', -1)
+      this.applyNames(L.items.slice(0, MAX))
+      put(this, 'srcLabel', this.srcText(L))
+      writeJSON(KEY_CUR, idx)
+      writeJSON(KEY_ITEMS, L.items.slice(0, MAX))
+    },
+
+    srcText(L) {
+      var s = '来源：' + bundleSource() + ' · 共 ' + ((L && L.items) ? L.items.length : 0) + ' 项'
+      var n = (this.lists || []).length
+      if (n > 1) s += ' · 列表 ' + (this.listIdx + 1) + '/' + n
+      if (L && L.trunc) s += ' · 已截断 ' + L.trunc + ' 项'
+      if (this.srcStale) s += ' · 数据源已更新'
+      return s
+    },
+
+    /* 把当前 items 写回「当前列表」+ 存储 */
+    saveItems() {
+      var names = []
+      var its = this.items || []
+      for (var i = 0; i < its.length; i++) names.push(its[i].n)
+      writeJSON(KEY_ITEMS, names)
+      var lists = (this.lists || []).slice()
+      var idx = this.listIdx
+      if (lists[idx]) {
+        lists[idx] = { name: lists[idx].name, items: names, trunc: lists[idx].trunc }
+        put(this, 'lists', lists)
+        put(this, 'srcLabel', this.srcText(lists[idx]))
+      }
+      this.persist()
+    },
+
+    /* 名称数组 -> items + 扇区几何 */
+    applyNames(names) {
+      var items = []
+      for (var i = 0; i < names.length && i < MAX; i++) items.push({ n: names[i], c: colorAt(i) })
+      put(this, 'items', items)
+      this.rebuild()
+    },
+
+    rebuild() {
+      var items = this.items || []
+      /* 标签层算不出来也绝不能拖垮整页：退回「无标签」但转盘仍在 */
+      var sec = []
+      try {
+        sec = makeSectors(items, W_R, W_CY, -1, this.spin, HUB_SAFE)
+      } catch (e) {
+        sec = []
+        this.fail(e, 'labels')
+      }
+      put(this, 'sectors', sec)
+      this.buildResultSectors()
+    },
+
+    buildResultSectors() {
+      var items = this.items || []
+      try {
+        put(this, 'rsectors', makeSectors(items, R_R, R_CY, this.resultIdx, this.spin, 0))
+      } catch (e) {
+        put(this, 'rsectors', [])
+      }
+    },
+
+    /* ============ 兜底：报错上屏 + 降级渲染 ============ */
+    fail(e, where) {
+      var m = ''
+      try { m = (e && e.message) ? e.message : String(e) } catch (x) { m = '未知错误' }
+      try { put(this, 'errText', 'ERR[' + where + ']: ' + cut(m, 56)) } catch (x) {}
+      try { console.log('[转盘] ' + where + ' 失败: ' + m) } catch (x) {}
+      this.degraded()
+    },
+
+    /* 只保证「至少能转」：canvas 转盘 + 中心钮，标签层可以先没有 */
+    degraded() {
+      try { put(this, 'sectors', []) } catch (e) {}
+      try { put(this, 'rsectors', []) } catch (e) {}
+      try {
+        if (!this.items || !this.items.length) {
+          var names = []
+          try { names = BUNDLE_LISTS[0].items.slice(0, MAX) } catch (e) { names = DEFAULTS.slice(0, MAX) }
+          var its = []
+          for (var i = 0; i < names.length; i++) its.push({ n: names[i], c: colorAt(i) })
+          put(this, 'items', its)
+        }
+      } catch (e) {}
+      try { if (!this.view) put(this, 'view', 'wheel') } catch (e) {}
+      try { this.draw() } catch (e) {}
+    },
+
+    /* ============ 绘制 ============ */
+    /* 视图切换会重建 canvas 节点，必须丢弃旧句柄 */
+    resetCanvas() {
+      this._c1 = null; this._c1x = null
+      this._c2 = null; this._c2x = null
+      if (this._dt) { clearTimeout(this._dt); this._dt = null }
+    },
+
+    ctxFor(id) {
+      var wheel = (id === 'wheelCanvas')
+      var el = wheel ? this._c1 : this._c2
+      if (!el) {
+        el = getEl(this, id)
+        if (!el) return null
+        if (wheel) this._c1 = el; else this._c2 = el
+      }
+      var ctx = wheel ? this._c1x : this._c2x
+      if (!ctx) {
+        try { ctx = el.getContext('2d') } catch (e) { return null }
+        if (!ctx) return null
+        if (wheel) this._c1x = ctx; else this._c2x = ctx
+      }
+      return ctx
+    },
+
+    drawWithRetry(left) {
+      var self = this
+      try { this.draw() } catch (e) { console.log('[转盘] draw 异常 ' + e) }
+      if (left > 0) {
+        if (this._dt) clearTimeout(this._dt)
+        this._dt = setTimeout(function () {
+          try { self.drawWithRetry(left - 1) } catch (e) {}
+        }, 90)
+      }
+    },
+
+    drawResultRetry(left) {
+      var self = this
+      try { this.drawResult() } catch (e) { console.log('[转盘] drawResult 异常 ' + e) }
+      if (left > 0) {
+        this._drt = setTimeout(function () {
+          try { self.drawResultRetry(left - 1) } catch (e) {}
+        }, 90)
+      }
+    },
+
+    draw() { this.drawCore('wheelCanvas', W_CY, W_R, false) },
+
+    drawResult() { this.drawCore('resultCanvas', R_CY, R_R, true) },
+
+    drawCore(id, cy, r, isResult) {
+      var ctx = this.ctxFor(id)
+      if (!ctx) return
+      var items = this.items || []
+      var n = items.length
+      var i, a0, a1, seg, k = Math.PI / 180, PI2 = Math.PI * 2
+      var wi = this.resultIdx
+
+      try {
+        ctx.clearRect(0, 0, CANVAS, CANVAS)
+
+        /* 底盘 + 深色描边 */
+        ctx.beginPath()
+        ctx.arc(CX, cy, r + 9, 0, PI2, false)
+        ctx.fillStyle = '#14141a'
+        ctx.fill()
+        ctx.lineWidth = 3
+        ctx.strokeStyle = isResult ? '#4a4a5c' : '#33333f'
+        ctx.stroke()
+
+        if (n > 0) {
+          seg = 360 / n
+          for (i = 0; i < n; i++) {
+            a0 = (-90 + i * seg + this.spin) * k
+            a1 = a0 + seg * k
+            var dim = (wi >= 0 && wi !== i)
+            ctx.beginPath()
+            ctx.moveTo(CX, cy)
+            ctx.arc(CX, cy, r, a0, a1, false)
+            ctx.closePath()
+            ctx.fillStyle = dim ? hexA(items[i].c, 0.34) : items[i].c
+            ctx.fill()
+            ctx.lineWidth = 2
+            ctx.strokeStyle = '#0a0a0e'
+            ctx.stroke()
+          }
+
+          /* 中孔（仅转盘页；结果页保留扇区指向圆心，看得出角度） */
+          if (!isResult) {
+            ctx.beginPath()
+            ctx.arc(CX, cy, W_HUB + 6, 0, PI2, false)
+            ctx.fillStyle = '#0a0a0e'
+            ctx.fill()
+          }
+
+          /* 中奖扇区：轻微放大 + 白/金描边 */
+          if (wi >= 0 && wi < n) {
+            var w0 = (-90 + wi * seg + this.spin) * k
+            var w1 = w0 + seg * k
+            ctx.beginPath()
+            ctx.moveTo(CX, cy)
+            ctx.arc(CX, cy, r + 4, w0, w1, false)
+            ctx.closePath()
+            ctx.fillStyle = items[wi].c
+            ctx.fill()
+            ctx.lineWidth = 4
+            ctx.strokeStyle = '#FFF3B0'
+            ctx.stroke()
+
+            /* 内圈亮弧 */
+            var b0 = (-90 + wi * seg + this.spin) * k + 5 * k
+            var b1 = (-90 + (wi + 1) * seg + this.spin) * k - 5 * k
+            ctx.beginPath()
+            ctx.arc(CX, cy, r - 9, b0, b1, false)
+            ctx.lineWidth = 4
+            ctx.strokeStyle = '#ffffff'
+            ctx.stroke()
+          }
+        }
+
+        /* 指针（固定在正上方，不随转盘旋转） */
+        var py = cy - r
+        ctx.beginPath()
+        ctx.moveTo(CX - 13, py - 19)
+        ctx.lineTo(CX + 13, py - 19)
+        ctx.lineTo(CX, py + 10)
+        ctx.closePath()
+        ctx.fillStyle = (this.resultIdx >= 0) ? '#ffffff' : GOLD
+        ctx.fill()
+      } catch (e) {
+        console.log('[转盘] 绘制异常 ' + e)
+      }
+    },
+
+    /* ============ 交互 ============ */
+    onHub() {
+      if (this.view !== 'wheel') return
+      if (this.spinning) return
+      this.startSpin()
+    },
+
+    updateHub() {
+      if (this.spinning) {
+        put(this, 'hubText', '···')
+        put(this, 'hubFs', 30)
+        put(this, 'hubBg', '#20202b')
+        put(this, 'hubBd', '#3a3a4c')
+        put(this, 'hubColor', '#8a8a9c')
+        return
+      }
+      if (this.resultIdx >= 0 && this.items[this.resultIdx]) {
+        var t = this.items[this.resultIdx].n
+        put(this, 'hubText', t.length <= 2 ? t : cut(t, 4))
+        put(this, 'hubFs', t.length <= 2 ? 34 : (t.length === 3 ? 26 : 20))
+        put(this, 'hubBg', '#17171f')
+        put(this, 'hubBd', GOLD)
+        put(this, 'hubColor', '#ffffff')
+        return
+      }
+      put(this, 'hubText', '开始')
+      put(this, 'hubFs', 30)
+      put(this, 'hubBg', GOLD)
+      put(this, 'hubBd', GOLD)
+      put(this, 'hubColor', '#14141a')
+    },
+
+    /* 先定结果，再反算角度 */
+    startSpin() {
+      var n = this.items.length
+      if (!n) return
+      if (this._t1) { clearTimeout(this._t1); this._t1 = null }
+
+      var idx = Math.floor(Math.random() * n)      // ① 结果先定
+      var seg = 360 / n
+
+      /* ② 让第 idx 个扇区的中心停在 12 点方向（指针处） */
+      var want = norm(-(idx * seg + seg / 2))
+      var cur = norm(this.spin)
+      var delta = norm(want - cur)
+      var turns = 4 + (Math.random() < 0.35 ? 1 : 0)
+      var total = 360 * turns + delta
+      var from = this.spin
+      var dur = 3000 + Math.round(Math.random() * 400)
+      var t0 = Date.now()
+
+      put(this, 'spinning', true)
+      put(this, 'resultIdx', -1)
+      put(this, 'phoneMsg', '')
+      this.updateHub()
+      this.draw()
+
+      var self = this
+      if (this._timer) clearInterval(this._timer)
+      this._timer = setInterval(function () {
+        var t = (Date.now() - t0) / dur
+        if (t > 1) t = 1
+        var e = 1 - Math.pow(1 - t, 3)           // ③ ease-out cubic：起步快、收尾慢
+        var v = Math.round((from + total * e) * 100) / 100
+        put(self, 'spin', v)
+        /* 标签角度 = spin + 扇区中线：每帧只做 O(n) 三角函数，尺寸走缓存 */
+        try {
+          put(self, 'sectors', makeSectors(self.items, W_R, W_CY, -1, v, HUB_SAFE))
+        } catch (e) {
+          /* 标签算崩了也不能停转盘：清掉标签继续转 */
+          put(self, 'sectors', [])
+        }
+        try { self.draw() } catch (e) {}
+        if (t >= 1) self.finish(idx)
+      }, 32)
+    },
+
+    finish(idx) {
+      if (this._timer) { clearInterval(this._timer); this._timer = null }
+      put(this, 'spinning', false)
+      put(this, 'resultIdx', idx)
+      var name = this.items[idx] ? this.items[idx].n : ''
+      put(this, 'resultText', cut(name, 5))
+      put(this, 'rfs', name.length <= 2 ? 54 : (name.length === 3 ? 44 : (name.length === 4 ? 38 : 30)))
+      this.updateHub()
+      this.buildResultSectors()
+      this.draw()                     // 转盘页先压暗其余扇区，制造"选中"瞬间
+      buzz(2)
+      this.popHub()
+
+      var self = this
+      if (this._t1) clearTimeout(this._t1)
+      this._t1 = setTimeout(function () {
+        put(self, 'view', 'result')
+        self.resetCanvas()
+        self.drawResultRetry(8)
+        self.startBreath()
+      }, 700)
+    },
+
+    /* 停下瞬间的中心轻微缩放 */
+    popHub() {
+      var self = this
+      if (this._pop) clearInterval(this._pop)
+      var step = 0
+      this._pop = setInterval(function () {
+        step++
+        var s = 1 + 0.12 * Math.sin(step * 0.9) * (1 - step / 10)
+        put(self, 'hubScale', Math.round(s * 1000) / 1000)
+        if (step >= 10) {
+          clearInterval(self._pop)
+          self._pop = null
+          put(self, 'hubScale', 1)
+        }
+      }, 55)
+    },
+
+    /* 结果页呼吸（外圈金环） */
+    startBreath() {
+      var self = this
+      this.stopBreath()
+      var t0 = Date.now()
+      this._bt = setInterval(function () {
+        var t = (Date.now() - t0) / 1000
+        var s = 1 + 0.035 * Math.sin(t * 2.2)
+        put(self, 'halo', Math.round(s * 1000) / 1000)
+        var o = 0.5 + 0.4 * (0.5 + 0.5 * Math.sin(t * 2.2))
+        put(self, 'haloO', Math.round(o * 100) / 100)
+      }, 60)
+    },
+    stopBreath() {
+      if (this._bt) { clearInterval(this._bt); this._bt = null }
+    },
+
+    again() {
+      this.stopBreath()
+      this.resetCanvas()
+      put(this, 'resultIdx', -1)
+      put(this, 'view', 'wheel')
+      var self = this
+      if (this._t1) clearTimeout(this._t1)
+      this.drawWithRetry(6)
+      this._t1 = setTimeout(function () { self.startSpin() }, 260)
+    },
+    back() {
+      this.stopBreath()
+      this.resetCanvas()
+      put(this, 'resultIdx', -1)
+      put(this, 'view', 'wheel')
+      this.updateHub()
+      this.drawWithRetry(6)
+    },
+
+    /* ============ 长按进入编辑 ============ */
+    onPressStart() {
+      if (this.view !== 'wheel' || this.spinning) return
+      var self = this
+      if (this._pt) clearTimeout(this._pt)
+      this._pt = setTimeout(function () {
+        self._pt = null
+        self.toEdit()
+      }, 750)
+    },
+    onPressEnd() {
+      if (this._pt) { clearTimeout(this._pt); this._pt = null }
+    },
+
+    toEdit() {
+      put(this, 'view', 'edit')
+      put(this, 'phoneMsg', '')
+      this.resetCanvas()
+    },
+    backToWheel() {
+      this.resetCanvas()
+      put(this, 'view', 'wheel')
+      this.updateHub()
+      this.drawWithRetry(6)
+    },
+
+    delItem(i) {
+      var items = this.items.slice()
+      if (items.length <= 2) {
+        put(this, 'phoneMsg', '至少保留 2 个项目')
+        toast('至少保留 2 个项目')
+        return
+      }
+      items.splice(i, 1)
+      var names = items.map(function (it) { return it.n })
+      put(this, 'resultIdx', -1)
+      this.applyNames(names)
+      this.saveItems()
+      put(this, 'phoneMsg', '已删除 · 剩 ' + names.length + ' 项')
+    },
+
+    /* 上移一位（v1.4.0）：第一项点「↑」循环到最后一项。
+       只改当前列表，顺序会立刻写进本地存储。 */
+    moveUp(i) {
+      var its = this.items || []
+      if (its.length < 2) return
+      if (i < 0 || i >= its.length) return
+      var names = []
+      for (var k = 0; k < its.length; k++) names.push(its[k].n)
+      var v = names.splice(i, 1)[0]
+      if (i === 0) names.push(v)          /* 循环：首位 -> 末尾 */
+      else names.splice(i - 1, 0, v)
+      put(this, 'resultIdx', -1)
+      this.applyNames(names)
+      this.saveItems()
+      put(this, 'phoneMsg', '已上移「' + v + '」')
+    },
+
+    /* ============ 预设词库添加（v1.4.0） ============ */
+    toAdd() {
+      if (!PRESET_GROUPS.length) {
+        put(this, 'phoneMsg', '词库为空')
+        return
+      }
+      if ((this.items || []).length >= MAX) {
+        put(this, 'phoneMsg', '已有 ' + MAX + ' 项，先删一个再加')
+        toast('最多 ' + MAX + ' 项')
+        return
+      }
+      put(this, 'view', 'add')
+      put(this, 'phoneMsg', '')
+      /* 标题长度必须可控（圆屏 y=20 处只有 ~189px 宽），列表名截到 6 字 */
+      put(this, 'addTitle', '添加 · ' + cut(this.listName, 6))
+      this.resetCanvas()
+      this.renderAdd(this.addGroup || 0)
+    },
+
+    backFromAdd() {
+      put(this, 'view', 'edit')
+      put(this, 'phoneMsg', '')
+    },
+
+    setGroup(g) { this.renderAdd(g) },
+
+    /* 算分组标签 + 芯片落位（2 列 × 最多 5 行，绝对坐标；已存在的置灰不可重复加） */
+    renderAdd(g) {
+      var groups = PRESET_GROUPS
+      if (!groups.length) return
+      if (g < 0 || g >= groups.length) g = 0
+      put(this, 'addGroup', g)
+
+      var tabs = []
+      for (var i = 0; i < groups.length; i++) {
+        tabs.push({
+          n: cut(groups[i].name, 3),
+          bg: (i === g) ? GOLD : '#24242e',
+          fg: (i === g) ? '#14141a' : '#c8c8d4'
+        })
+      }
+      put(this, 'presetTabs', tabs)
+
+      var have = {}
+      var its = this.items || []
+      for (var k = 0; k < its.length; k++) have[its[k].n] = 1
+
+      var words = groups[g].words || []
+      var chips = []
+      for (var w = 0; w < words.length && w < 10; w++) {
+        var nm = words[w]
+        var col = w % 2
+        var row = Math.floor(w / 2)
+        var dis = !!have[nm]
+        chips.push({
+          n: nm,
+          on: dis ? 0 : 1,
+          x: 60 + col * 178,
+          y: 104 + row * 48,
+          w: 168,
+          h: 40,
+          bg: dis ? '#15151c' : '#24242e',
+          fg: dis ? '#4a4a58' : '#e6e6ee'
+        })
+      }
+      put(this, 'presetChips', chips)
+    },
+
+    addPreset(i) {
+      var G = PRESET_GROUPS[this.addGroup || 0]
+      if (!G) return
+      var chip = (this.presetChips || [])[i]
+      if (!chip) return
+      if (!chip.on) {
+        toast('「' + chip.n + '」已经在列表里')
+        return
+      }
+      var its = this.items || []
+      if (its.length >= MAX) {
+        put(this, 'phoneMsg', '最多 ' + MAX + ' 项，先删一个')
+        toast('最多 ' + MAX + ' 项')
+        return
+      }
+      var names = []
+      for (var k = 0; k < its.length; k++) names.push(its[k].n)
+      names.push(chip.n)
+      put(this, 'resultIdx', -1)
+      this.applyNames(names)
+      this.saveItems()
+      put(this, 'view', 'edit')          /* 加入后回编辑页，列表刷新 */
+      put(this, 'phoneMsg', '已添加「' + chip.n + '」· 共 ' + names.length + ' 项')
+      buzz(1)
+    },
+
+    /* 恢复导入数据 = 把「当前这张列表」恢复成 items.csv 的原始内容。
+       v1.4.0：覆盖表上修改是不可逆的，所以要点两次（4 秒内），避免误触把编辑丢了。 */
+    resetItems() {
+      var lists = (this.lists || []).slice()
+      if (!lists.length) return
+      var self = this
+      if (!this._rst) {
+        this._rst = setTimeout(function () {
+          self._rst = null
+          put(self, 'phoneMsg', '')
+        }, 4000)
+        put(this, 'phoneMsg', '再点一次「恢复」确认（覆盖表上修改）')
+        toast('再点一次确认恢复')
+        return
+      }
+      if (this._rst) { clearTimeout(this._rst); this._rst = null }
+
+      var cur = lists[this.listIdx] || lists[0]
+      var base = null
+      for (var i = 0; i < BUNDLE_LISTS.length; i++) {
+        if (BUNDLE_LISTS[i].name === cur.name) base = BUNDLE_LISTS[i]
+      }
+      if (!base) base = BUNDLE_LISTS[0]
+      /* v1.4.0：只恢复项目内容，列表名保持不动（用户切过去的那张表还是那张表） */
+      lists[this.listIdx] = { name: cur.name, items: base.items.slice(0, MAX), trunc: base.trunc }
+      put(this, 'lists', lists)
+      this.loadList(this.listIdx)
+      this.persist()
+      put(this, 'phoneMsg', '已恢复「' + base.name + '」的 ' + base.items.length + ' 项')
+      toast('已恢复')
+    },
+
+    /* ============ 多列表切换 ============ */
+    prevList() { this.switchList(-1) },
+    nextList() { this.switchList(1) },
+    switchList(d) {
+      var n = (this.lists || []).length
+      if (n < 2) return
+      var idx = (this.listIdx + d + n) % n
+      this.loadList(idx)
+      this.persist()
+      put(this, 'phoneMsg', '已切到「' + cut(this.lists[idx].name, 6) + '」')
+    },
+
+
+    /* ============ 手机同步（阶段二预留） ============ */
+    applySynced(names) {
+      if (!names || !names.length) return false
+      var clean = []
+      for (var i = 0; i < names.length && clean.length < MAX; i++) {
+        if (typeof names[i] === 'string' && names[i]) clean.push(names[i])
+      }
+      if (clean.length < 2) return false
+      put(this, 'resultIdx', -1)
+      this.applyNames(clean)
+      this.saveItems()
+      put(this, 'phoneMsg', '已同步 ' + clean.length + ' 项')
+      return true
+    },
+
+    /* ============ 重新读取导入数据（编辑页底部「重读数据源」） ============ */
+    syncPhone() {
+      var lists = cloneLists(BUNDLE_LISTS)
+      put(this, 'lists', lists)
+      put(this, 'srcStale', 0)
+      this.loadList(0)
+      this.persist()
+      put(this, 'phoneMsg', '已重读 ' + bundleSource() + ' · ' + lists.length + ' 张列表')
+      toast('已重新读取')
+    }
+  }
+</script>

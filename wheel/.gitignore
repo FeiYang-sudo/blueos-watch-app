@@ -1,0 +1,22 @@
+# 构建产物
+build/
+dist/
+*.rpk
+*.zip
+
+# 依赖
+node_modules/
+
+# 签名私钥（不入库）
+sign/*.pem
+sign/*.key
+sign/*.p12
+!sign/debug/.gitkeep
+!sign/release/.gitkeep
+
+# 临时/日志
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+preview/out/

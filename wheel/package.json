@@ -1,0 +1,10 @@
+{
+  "name": "wheel",
+  "version": "1.4.0",
+  "description": "蓝河手表随机转盘",
+  "packageManager": "pnpm@9.9.0",
+  "scripts": {},
+  "browserslist": [
+    "chrome 65"
+  ]
+}

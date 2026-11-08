@@ -1,0 +1,44 @@
+{
+  "package": "com.dz6g.wheel",
+  "name": "转盘",
+  "versionName": "1.4.0",
+  "versionCode": 6,
+  "appCategory": [
+    "other"
+  ],
+  "icon": "/assets/images/logo.png",
+  "deviceTypeList": [
+    "watch-round"
+  ],
+  "config": {
+    "designWidth": 466,
+    "debug": false
+  },
+  "display": {
+    "backgroundColor": "#0a0a0e"
+  },
+  "minPlatformVersion": 1070,
+  "features": [
+    {
+      "name": "system.storage"
+    },
+    {
+      "name": "system.prompt"
+    },
+    {
+      "name": "system.vibrator"
+    },
+    {
+      "name": "system.router"
+    }
+  ],
+  "permissions": [],
+  "router": {
+    "entry": "pages/Home",
+    "pages": {
+      "pages/Home": {
+        "component": "index"
+      }
+    }
+  }
+}
